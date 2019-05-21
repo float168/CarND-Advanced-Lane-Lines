@@ -8,10 +8,12 @@ matplotlib = "*"
 pyqt5 = "*"
 jupyter = "*"
 jupytext = "*"
+pylint = "*"
 
 [packages]
 numpy = "*"
 opencv-python = "*"
+moviepy = "*"
 
 [requires]
 python_version = "3.6"
