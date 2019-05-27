@@ -336,6 +336,48 @@ for img in done_images:
     ax.imshow(img)
 
 
+# +
+def calc_curvature_real(y_px, left_fit, right_fit, y_m_per_px=25/720, x_m_per_px=30/500):
+    def R(A, B, y):
+        return (1 + (2 * A * y + B)**2)**(1.5) / (2 * np.abs(A))
+
+    # Scale coefficients
+    # source: x = coeff[0] * y**2 + coeff[1] * y + coeff[2]
+    # scaled: x = x_scale / y_scale**2 * coeff[0] * y**2 + x_scale / y_scale * coeff[1] * y + coeff[2]
+    def scale_coeff(coeff, y_scale, x_scale):
+        return (coeff[0] * x_scale / y_scale**2,
+                coeff[1] * x_scale / y_scale,
+                coeff[2])
+    scaled_left_coeff  = scale_coeff(left_fit,  y_m_per_px, x_m_per_px)
+    scaled_right_coeff = scale_coeff(right_fit, y_m_per_px, x_m_per_px)
+
+    left_curverad  = R(scaled_left_coeff[0],  scaled_left_coeff[1],  y_px * y_m_per_px)
+    right_curverad = R(scaled_right_coeff[0], scaled_right_coeff[1], y_px * y_m_per_px)
+
+    return left_curverad, right_curverad
+
+def calc_car_pos_from_center(y_px, width, left_fit, right_fit, x_m_per_px=30/500):
+    def f(coeff, y):
+        return coeff[0] * y**2 + coeff[1] * y + coeff[2]
+    left_lane_x_px  = f(left_fit, y_px)
+    right_lane_x_px = f(right_fit, y_px)
+
+    return (left_lane_x_px + right_lane_x_px - width) * x_m_per_px // 2
+
+def embed_status(img, left_curverad, car_pos_from_center):
+    rad_text = 'Radius: {}m'.format(int(left_curverad))
+    pos_text = "Position: {:+.2f}m".format(car_pos_from_center)
+    new_img = np.copy(img)
+    cv2.putText(new_img, rad_text, (10,50), cv2.FONT_HERSHEY_PLAIN, 4, (255,255,255), 6)
+    cv2.putText(new_img, pos_text, (10,100), cv2.FONT_HERSHEY_PLAIN, 4, (255,255,255), 6)
+    return new_img
+    
+radiuses = [calc_curvature_real(height-1, left_fit, right_fit) for left_fit, right_fit in fits]
+car_poses = [calc_car_pos_from_center(height-1, width, left_fit, right_fit) for left_fit, right_fit in fits]
+complete_images = [embed_status(img, rad[0], pos) for img, rad, pos in zip(done_images, radiuses, car_poses)]
+plt.imshow(complete_images[0])
+
+
 # -
 
 # ## And so on and so forth...
