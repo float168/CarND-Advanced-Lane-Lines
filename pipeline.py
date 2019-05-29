@@ -82,7 +82,7 @@ class LaneFeatureExtractor:
             binary[(thresh[0] <= img) & (img <= thresh[1])] = 255
             return binary
 
-        def apply_abs_sobel_thresh(gray, orient='x', ksize=3, thresh=(0,255)):
+        def extract_abs_sobel(gray, orient='x', ksize=3):
             sobel = None
             if orient == 'x':
                 sobel = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=ksize)
@@ -92,50 +92,48 @@ class LaneFeatureExtractor:
                 raise ValueError("Unknown orient type: {}".format(orient))
             abs_sobel = np.absolute(sobel)
             scaled_sobel = np.uint8(255 * abs_sobel / np.max(abs_sobel))
-            return apply_threshold(scaled_sobel, thresh)
+            return scaled_sobel
 
-        def apply_mag_sobel_thresh(gray, ksize=3, thresh=(0,255)):
+        def extract_mag_sobel(gray, ksize=3):
             x_sobel = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=ksize)
             y_sobel = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=ksize)
             mag_sobel = np.sqrt(x_sobel**2 + y_sobel**2)
             scaled_sobel = np.uint8(255 * mag_sobel / np.max(mag_sobel))
-            return apply_threshold(scaled_sobel, thresh)
+            return scaled_sobel
 
-        def apply_dir_sobel_thresh(gray, ksize=3, thresh=(0,np.pi/2)):
+        def extract_dir_sobel(gray, ksize=3):
             x_abs_sobel = np.absolute(cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=ksize))
             y_abs_sobel = np.absolute(cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=ksize))
             theta = np.arctan2(y_abs_sobel, x_abs_sobel)
-            return apply_threshold(theta, thresh)
+            return theta
 
-        def apply_satur_thresh(rgb, thresh=(0,255)):
+        def extract_satur(rgb):
             hls = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS)
-            S = hls[:,:,2]
-            return apply_threshold(S, thresh)
+            satur = hls[:,:,2]
+            return satur
 
         gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
 
-        x_abs_sobel_binary = apply_abs_sobel_thresh(gray_image, orient='x',
-                ksize=self.ksize_dict['abs_sobel'],
-                thresh=self.thresh_dict['abs_sobel'])
-        y_abs_sobel_binary = apply_abs_sobel_thresh(gray_image, orient='y',
-                ksize=self.ksize_dict['abs_sobel'],
-                thresh=self.thresh_dict['abs_sobel'])
-        mag_sobel_binary   = apply_mag_sobel_thresh(gray_image,
-                ksize=self.ksize_dict['mag_sobel'],
-                thresh=self.thresh_dict['mag_sobel'])
-        dir_sobel_binary   = apply_dir_sobel_thresh(gray_image,
-                ksize=self.ksize_dict['dir_sobel'],
-                thresh=self.thresh_dict['dir_sobel'])
-        satur_binary       = apply_satur_thresh(rgb_image,
-                thresh=self.thresh_dict['satur'])
+        x_abs_sobel     = extract_abs_sobel(gray_image, orient='x', ksize=self.ksize_dict['abs_sobel'])
+        x_abs_sobel_bin = apply_threshold(x_abs_sobel, thresh=self.thresh_dict['abs_sobel'])
+        y_abs_sobel     = extract_abs_sobel(gray_image, orient='y', ksize=self.ksize_dict['abs_sobel'])
+        y_abs_sobel_bin = apply_threshold(y_abs_sobel, thresh=self.thresh_dict['abs_sobel'])
+        mag_sobel       = extract_mag_sobel(gray_image, ksize=self.ksize_dict['mag_sobel'])
+        mag_sobel_bin   = apply_threshold(mag_sobel, thresh=self.thresh_dict['mag_sobel'])
+        dir_sobel       = extract_dir_sobel(gray_image, ksize=self.ksize_dict['dir_sobel'])
+        dir_sobel_bin   = apply_threshold(dir_sobel, thresh=self.thresh_dict['dir_sobel'])
+        satur           = extract_satur(rgb_image)
+        satur_bin       = apply_threshold(satur, thresh=self.thresh_dict['satur'])
 
         combined_binary = np.zeros_like(gray_image, dtype='uint8')
-        combined_binary[((x_abs_sobel_binary == 255) & (y_abs_sobel_binary == 255))
-                | ((mag_sobel_binary == 255) & (dir_sobel_binary == 255))
-                | (satur_binary == 255)] = 255
+        combined_binary[((x_abs_sobel_bin== 255) & (y_abs_sobel_bin== 255))
+                | ((mag_sobel_bin== 255) & (dir_sobel_bin== 255))
+                | (satur_bin== 255)] = 255
 
         if debug:
-            fig, ax = plt.subplots(3, 2, figsize=(12,12))
+            fig, ax = plt.subplots(5, 2, figsize=(12,20))
+            fig.suptitle('LaneFeatureExtractor', fontsize=16)
+            fig.subplots_adjust(top=0.95)
 
             ax[0,0].set_title("input")
             ax[0,0].imshow(rgb_image)
@@ -145,25 +143,40 @@ class LaneFeatureExtractor:
                 rgb = np.zeros(shape, dtype='uint8')
                 i = bin_a == 255
                 j = bin_b == 255
-                dark = 64
+                dark = 96
                 rgb[i] = (0, dark, dark)
                 rgb[j] = (dark, dark, 0)
-                rgb[i & j] = (255, 64, 64)
+                rgb[i & j] = (255, 0, 0)
                 return rgb
 
-            ax[0,1].set_title("x_abs_sobel(cyan) / y_abs_sobel(yellow)")
-            rgb_debug = make_intersect_image(x_abs_sobel_binary, y_abs_sobel_binary)
-            ax[0,1].imshow(rgb_debug)
+            ax[0,1].set_title("x_abs_sobel")
+            ax[0,1].imshow(x_abs_sobel, cmap='gray')
 
-            ax[1,0].set_title("mag_sobel(cyan) / dir_sobel(yellow)")
-            rgb_debug = make_intersect_image(mag_sobel_binary, dir_sobel_binary)
-            ax[1,0].imshow(rgb_debug)
+            ax[1,0].set_title("y_abs_sobel")
+            ax[1,0].imshow(y_abs_sobel, cmap='gray')
 
-            ax[1,1].set_title("saturation")
-            ax[1,1].imshow(satur_binary, cmap='gray')
+            ax[1,1].set_title("x_abs_sobel_bin(cyan) / y_abs_sobel_bin(yellow)")
+            rgb_debug = make_intersect_image(x_abs_sobel_bin, y_abs_sobel_bin)
+            ax[1,1].imshow(rgb_debug)
 
-            ax[2,0].set_title("output")
-            ax[2,0].imshow(combined_binary, cmap='gray')
+            ax[2,0].set_title("mag_sobel")
+            ax[2,0].imshow(mag_sobel, cmap='gray')
+
+            ax[2,1].set_title("dir_sobel")
+            ax[2,1].imshow(dir_sobel, cmap='gray')
+
+            ax[3,0].set_title("mag_sobel_bin(cyan) / dir_sobel_bin(yellow)")
+            rgb_debug = make_intersect_image(mag_sobel_bin, dir_sobel_bin)
+            ax[3,0].imshow(rgb_debug)
+
+            ax[3,1].set_title("saturation")
+            ax[3,1].imshow(satur, cmap='gray')
+
+            ax[4,0].set_title("saturation_bin")
+            ax[4,0].imshow(satur_bin, cmap='gray')
+
+            ax[4,1].set_title("output_bin")
+            ax[4,1].imshow(combined_binary, cmap='gray')
 
             plt.show()
 
@@ -216,7 +229,7 @@ class Warper:
 
 
 # Detect lane position from warped view
-# This class can be used as batch mode for stream processing
+# This class can be used as stream mode for stream processing
 class LaneDetector:
     class LineHistory:
         class RecentList:
@@ -258,7 +271,7 @@ class LaneDetector:
         self.left_line_history  = self.LineHistory()
         self.right_line_history = self.LineHistory()
 
-    def draw_lane(self, binary_image, raw_image, warper, batch=False, debug=False):
+    def draw_lane(self, binary_image, raw_image, warper, stream=False, debug=False):
         height, width = binary_image.shape
         bottom_half   = binary_image[(height//2):,:]
         histogram     = np.sum(bottom_half, axis=0)
@@ -298,7 +311,8 @@ class LaneDetector:
 
                 line_pt_idxs_list.append(line_pt_idxs)
 
-                if len(line_pt_idxs) > self.reposition_thresh:
+                if len(line_pt_idxs) > self.reposition_thresh[0] and \
+                        len(line_pt_idxs) > self.reposition_thresh[1]:
                     win_x_mid = np.int(np.mean(nonzero_x_idxs[line_pt_idxs]))
 
             line_pt_idxs = np.concatenate(line_pt_idxs_list)
@@ -334,14 +348,15 @@ class LaneDetector:
         debug_image = None
         fig = None
         if debug:
-            debug_image = np.tile(binary_image.T, (3,1,1)).T
-            fig, ax = plt.subplots(2, 2, figsize=(12,8))
+            debug_image = np.dstack((binary_image, binary_image, binary_image))
+            fig, ax = plt.subplots(1, 2, figsize=(12,4))
 
         left_line_xs = None
         left_line_ys = None
         right_line_xs = None
         right_line_ys = None
-        if batch and self.left_line_history.recent_list_dict['detected'].last():
+        #if stream and self.left_line_history.recent_list_dict['detected'].last():
+        if False:
             left_line_xs, left_line_ys = collect_line_xy_by_prev_area(
                     self.left_line_history.recent_list_dict['coeffs'].first(),
                     debug_image)
@@ -352,16 +367,16 @@ class LaneDetector:
             left_line_xs, left_line_ys = collect_line_xy_by_window(left_win_x_mid, debug_image)
             right_line_xs, right_line_ys = collect_line_xy_by_window(right_win_x_mid, debug_image)
 
+        left_line_coeffs  = self.__fit_line_coeffs(left_line_xs, left_line_ys)
+        right_line_coeffs = self.__fit_line_coeffs(right_line_xs, right_line_ys)
+
         if debug:
-            ax[0,0].imshow(debug_image)
-            ax[0,0].scatter(left_line_xs, left_line_ys, s=1, c='red', marker='o')
-            ax[0,0].scatter(right_line_xs, right_line_ys, s=1, c='blue', marker='o')
-
-        def fit_quadratic_func(xs, ys):
-            return np.polyfit(ys, xs, 2)
-
-        left_line_coeffs  = fit_quadratic_func(left_line_xs, left_line_ys)
-        right_line_coeffs = fit_quadratic_func(right_line_xs, right_line_ys)
+            ax[0].imshow(debug_image)
+            ax[0].scatter(left_line_xs, left_line_ys,   s=1, c='red', marker='o')
+            ax[0].scatter(right_line_xs, right_line_ys, s=1, c='green', marker='o')
+            y = np.arange(height)
+            ax[0].plot(self.__line_func(left_line_coeffs, y),  y, c='cyan', lw=3)
+            ax[0].plot(self.__line_func(right_line_coeffs, y), y, c='cyan', lw=3)
 
         car_x_px = width // 2
         car_y_px = height - 1
@@ -415,19 +430,16 @@ class LaneDetector:
 
             left_pts = np.array([left_x, y], dtype='int32').T
             right_pts = np.array([right_x, y], dtype='int32').T
-            cv2.polylines(lane_image, [left_pts], False, (255,0,255), 30)
-            cv2.polylines(lane_image, [right_pts], False, (255,0,255), 30)
+            cv2.polylines(lane_image, [left_pts], False, (0,255,0), 30)
+            cv2.polylines(lane_image, [right_pts], False, (0,255,0), 30)
 
             polygon = np.concatenate([left_pts, right_pts[::-1]])
-            cv2.fillPoly(lane_image, [polygon], (0,0,255))
+            cv2.fillPoly(lane_image, [polygon], (255,255,0))
 
             return lane_image
 
         lane_warped_image = create_lane_image()
         lane_image = warper.inverse_warp(lane_warped_image)
-
-        if debug:
-            ax[0,1].imshow(lane_image)
 
         def weight_image(overlay_image, raw_image, α=0.8, β=1., γ=0.):
             """
@@ -436,7 +448,7 @@ class LaneDetector:
             """
             return cv2.addWeighted(raw_image, α, overlay_image, β, γ)
 
-        result_image = weight_image(lane_image, raw_image)
+        result_image = weight_image(lane_image, raw_image, α=1.0, β=0.4)
 
         def embed_status(image, curvature_radius_m, car_offset_m):
             rad_text = 'Radius: {}m'.format(int(curvature_radius_m))
@@ -455,8 +467,18 @@ class LaneDetector:
         result_image = embed_status(result_image, left_line_radius_m, car_offset_m)
 
         if debug:
-            ax[1,0].imshow(result_image)
+            ax[1].imshow(result_image)
             plt.plot()
 
         return result_image
+
+    def __fit_line_coeffs(self, xs, ys):
+        return np.polyfit(ys, xs, 2)
+
+    def __line_func(self, coeffs, y):
+            return coeffs[0] * y**2 + coeffs[1] * y + coeffs[2]
+
+    def __line_radius(self, coeffs, y):
+            A, B, _ = coeffs
+            return (1 + (2 * A * y + B)**2)**(1.5) / (2 * np.abs(A))
 
