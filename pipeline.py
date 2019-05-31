@@ -1,4 +1,5 @@
 from collections import defaultdict
+import copy
 
 import numpy as np
 import cv2
@@ -253,17 +254,38 @@ class LaneDetector:
             dummy = LaneDetector.Lane()
             self.list = [dummy]
             self.prev = dummy
+            self.averaged = dummy
 
         def update(self, lane):
             if len(self.list) == self.size:
                 self.list.pop(0)
             self.list.append(lane)
             self.prev = self.list[-1]
+            self.__update_averaged()
 
-    def __init__(self, n_windows, win_margin, reposition_thresh_rate, x_m_per_px, y_m_per_px):
+        def __update_averaged(self):
+            # Collect detected lane elements
+            detected_lanes = list(filter(lambda x: x.detected, self.list))
+            if not detected_lanes:
+                # Update averaged as dummy
+                self.averaged = LaneDetector.Lane()
+                return
+
+            size = len(detected_lanes)
+            left_coeffs = detected_lanes[0].left.coeffs
+            right_coeffs = detected_lanes[0].right.coeffs
+            for lane in detected_lanes[1:]:
+                left_coeffs += lane.left.coeffs
+                right_coeffs += lane.right.coeffs
+            left_line  = LaneDetector.Line(True, left_coeffs / size)
+            right_line = LaneDetector.Line(True, right_coeffs / size)
+            self.averaged = LaneDetector.Lane(left_line, right_line)
+
+    def __init__(self, n_windows, win_margin, reposition_thresh_rate, x_m_per_px, y_m_per_px, x_ignore_area=0):
         self.n_windows = n_windows
         self.win_margin = win_margin
         self.reposition_thresh_rate = reposition_thresh_rate
+        self.x_ignore_area = x_ignore_area
 
         self.x_m_per_px = x_m_per_px
         self.y_m_per_px = y_m_per_px
@@ -277,8 +299,8 @@ class LaneDetector:
         histogram     = np.sum(bottom_half, axis=0)
 
         hist_mid_idx    = np.int(histogram.shape[0]//2)
-        left_win_x_mid  = np.argmax(histogram[:hist_mid_idx])
-        right_win_x_mid = np.argmax(histogram[hist_mid_idx:]) + hist_mid_idx
+        left_win_x_mid  = self.x_ignore_area + np.argmax(histogram[self.x_ignore_area:hist_mid_idx])
+        right_win_x_mid = hist_mid_idx + np.argmax(histogram[hist_mid_idx:width-self.x_ignore_area])
 
         nonzero_idxs = binary_image.nonzero()
         nonzero_y_idxs = np.array(nonzero_idxs[0])
@@ -380,10 +402,10 @@ class LaneDetector:
             lane = self.Lane(left_line, right_line)
             self.lane_history.update(lane)
 
-        # TODO: use average for coefficients
-        #for lane in self.lane_history.list:
-        #    lane.left
-        #    lane.right
+            if self.lane_history.averaged.detected:
+                # Use averaged coeffs
+                left_line_coeffs  = self.lane_history.averaged.left.coeffs
+                right_line_coeffs = self.lane_history.averaged.right.coeffs
 
         # DEBUG
         if debug:
