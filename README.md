@@ -1,4 +1,3 @@
-<!-- #region -->
 Advanced Lane Finding Project (WIP)
 ===
 
@@ -23,10 +22,13 @@ This project follows the following structure:
 * [output_videos](./output_videos): includes generated videos by the application
 * [data](./data): includes input images and videos data
 
+### For development
 
-### For devel
-* [config](./config): 
-* [tool](./tool): utility tool for development
+Here are some files for the development:
+
+* [config](./config): config files
+* [tool](./tool): utility tools
+* [template](./template): includes example images and source code provided by Udacity
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
@@ -72,7 +74,6 @@ I used a combination of color and gradient thresholds to generate a binary image
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
 The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
-<!-- #endregion -->
 
 ```python
 src = np.float32(
