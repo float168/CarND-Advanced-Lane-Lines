@@ -1,0 +1,19 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+matplotlib = "*"
+pyqt5 = "*"
+jupyter = "*"
+jupytext = "*"
+pylint = "*"
+
+[packages]
+numpy = "*"
+opencv-python = "*"
+moviepy = "*"
+
+[requires]
+python_version = "3.6"
