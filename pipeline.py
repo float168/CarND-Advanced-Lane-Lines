@@ -187,34 +187,44 @@ class LaneFeatureExtractor:
 
 # Warp perspective
 class Warper:
-    def __init__(self, upper_left_point_pair, lower_left_point_pair, width):
+    def __init__(self, upper_left_point_pair, lower_left_point_pair):
         src_upper_left, dst_upper_left = upper_left_point_pair
         src_lower_left, dst_lower_left = lower_left_point_pair
 
-        def make_symmetric_trapez(upper_left, lower_left, width):
-            return np.float32([
-                    upper_left, [width-1-upper_left[0], upper_left[1]],
-                    lower_left, [width-1-lower_left[0], lower_left[1]],
-                    ])
-        self.src_points = make_symmetric_trapez(
-                src_upper_left, src_lower_left, width)
-        self.dst_points = make_symmetric_trapez(
-                dst_upper_left, dst_lower_left, width)
-
-        self.M_forward = cv2.getPerspectiveTransform(self.src_points, self.dst_points)
-        self.M_inverse = cv2.getPerspectiveTransform(self.dst_points, self.src_points)
+        self.src_upper_left = src_upper_left
+        self.dst_upper_left = dst_upper_left
+        self.src_lower_left = src_lower_left
+        self.dst_lower_left = dst_lower_left
 
     def forward_warp(self, img, debug=False):
-        warped = self.__warp(img, self.M_forward, debug=debug)
+        width = img.shape[1]
+
+        src_points = self.__make_symmetric_trapez(self.src_upper_left, self.src_lower_left, width)
+        dst_points = self.__make_symmetric_trapez(self.dst_upper_left, self.dst_lower_left, width)
+        M = cv2.getPerspectiveTransform(src_points, dst_points)
+
+        warped = self.__warp(img, M, debug=debug)
         if debug:
-            self.__debug_plot(img, warped, self.src_points, self.dst_points)
+            self.__debug_plot(img, warped, src_points, dst_points)
         return warped
 
     def inverse_warp(self, img, debug=False):
-        warped = self.__warp(img, self.M_inverse, debug=debug)
+        width = img.shape[1]
+
+        src_points = self.__make_symmetric_trapez(self.src_upper_left, self.src_lower_left, width)
+        dst_points = self.__make_symmetric_trapez(self.dst_upper_left, self.dst_lower_left, width)
+        M = cv2.getPerspectiveTransform(dst_points, src_points)
+
+        warped = self.__warp(img, M, debug=debug)
         if debug:
-            self.__debug_plot(img, warped, self.dst_points, self.src_points)
+            self.__debug_plot(img, warped, dst_points, src_points)
         return warped
+
+    def __make_symmetric_trapez(self, upper_left, lower_left, width):
+        return np.float32([
+                upper_left, [width-1-upper_left[0], upper_left[1]],
+                lower_left, [width-1-lower_left[0], lower_left[1]],
+                ])
 
     def __warp(self, img, M, debug=False):
         h, w = img.shape[:2]
@@ -293,7 +303,7 @@ class LaneDetector:
 
         self.lane_history  = self.LaneHistory(self.history_size)
 
-    def draw_lane(self, binary_image, raw_image, warper, stream=False, debug=False):
+    def draw_lane(self, binary_image, raw_image, warper, stream=False, debug=False, save_detection_to=None):
         # Create histogram and nonzero indexes for collecting line points
         height, width = binary_image.shape
         bottom_half   = binary_image[(height//2):,:]
@@ -319,8 +329,8 @@ class LaneDetector:
             for win_idx in range(self.n_windows):
                 win_y_hi  = height - win_idx * win_height
                 win_y_low = win_y_hi - win_height
-                win_x_hi   = win_x_mid + self.win_margin
-                win_x_low  = win_x_mid - self.win_margin
+                win_x_hi  = win_x_mid + self.win_margin
+                win_x_low = win_x_mid - self.win_margin
 
                 if debug_image is not None:
                     debug_image = cv2.rectangle(debug_image,
@@ -371,10 +381,11 @@ class LaneDetector:
 
         # DEBUG
         debug_image = None
+        fig = None
         ax = None
         if debug:
             debug_image = np.dstack((binary_image, binary_image, binary_image))
-            fig, ax = plt.subplots(1, 2, figsize=(12,4))
+            fig, ax = plt.subplots(1, 2, figsize=(26,8))
 
         # Collect line points
         left_line_xs = None
@@ -397,7 +408,6 @@ class LaneDetector:
         right_line_coeffs = self.__fit_line_coeffs(right_line_xs, right_line_ys)
 
         if stream:
-            # TODO: judge whether line is detected
             left_line  = self.Line(True, left_line_coeffs)
             right_line = self.Line(True, right_line_coeffs)
             lane = self.Lane(left_line, right_line)
@@ -416,6 +426,9 @@ class LaneDetector:
             y = np.arange(height)
             ax[0].plot(self.__line_func(left_line_coeffs, y),  y, c='cyan', lw=3)
             ax[0].plot(self.__line_func(right_line_coeffs, y), y, c='cyan', lw=3)
+            if save_detection_to is not None:
+                extent = ax[0].get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+                fig.savefig(save_detection_to, bbox_inches=extent)
 
         # Variables for calculating car position and curvature radius
         car_x_px = width // 2
