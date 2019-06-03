@@ -1,4 +1,4 @@
-Advanced Lane Finding Project (WIP)
+Advanced Lane Finding Project
 ===
 
 The goals / steps of this project are the following:
